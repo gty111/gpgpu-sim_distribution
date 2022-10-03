@@ -1020,8 +1020,34 @@ void shader_core_ctx::fetch() {
   m_L1I->cycle();
 }
 
+/**
+ * shm_stub
+ * insert before generate_mem_accesses
+ * tansfer shmem to gmem
+ **/
+void shader_core_ctx::shm_stub(warp_inst_t &inst,int ctaid){
+  if((inst.is_load() || inst.is_store()) && inst.space.get_type()==shared_space){
+    inst.space.set_type(global_space);
+    for(auto &it:inst.get_per_scalar_thread()){
+      for(int i=0;i<MAX_ACCESSES_PER_INSN_PER_THREAD;i++){
+        if(it.memreqaddr[i] != 0){
+          it.memreqaddr[i] += block_shm2glb[ctaid] ;
+        }
+      }
+    }
+  }
+}
+
 void exec_shader_core_ctx::func_exec_inst(warp_inst_t &inst) {
   execute_warp_inst_t(inst);
+  if (inst.is_load() || inst.is_store()) {
+    inst.generate_mem_accesses();
+  }
+}
+
+void shader_core_ctx::func_exec_inst(warp_inst_t &inst,unsigned ctaid) {
+  execute_warp_inst_t(inst);
+  shm_stub(inst,ctaid);
   if (inst.is_load() || inst.is_store()) {
     inst.generate_mem_accesses();
     // inst.print_m_accessq();
@@ -1044,7 +1070,7 @@ void shader_core_ctx::issue_warp(register_set &pipe_reg_set,
                      m_warp[warp_id]->get_dynamic_warp_id(),
                      sch_id);  // dynamic instruction information
   m_stats->shader_cycle_distro[2 + (*pipe_reg)->active_count()]++;
-  func_exec_inst(**pipe_reg);
+  func_exec_inst(**pipe_reg,m_warp[warp_id]->get_cta_id());
 
   if (next_inst->op == BARRIER_OP) {
     m_warp[warp_id]->store_info_of_last_inst_at_barrier(*pipe_reg);
@@ -3365,7 +3391,8 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k) const {
   unsigned int result_cta = max_cta_per_core;
 
   unsigned result = result_thread;
-  result = gs_min2(result, result_shmem);
+  //reduce shmem restrict on CTA num per SM
+  result = gs_min2(result, result_shmem*2);
   result = gs_min2(result, result_regs);
   result = gs_min2(result, result_cta);
 
@@ -3375,7 +3402,7 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k) const {
     last_kinfo = kernel_info;
     printf("GPGPU-Sim uArch: CTA/core = %u, limited by:", result);
     if (result == result_thread) printf(" threads");
-    if (result == result_shmem) printf(" shmem");
+    if (result == result_shmem*2) printf(" shmem");
     if (result == result_regs) printf(" regs");
     if (result == result_cta) printf(" cta_limit");
     printf("\n");
@@ -3405,7 +3432,10 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k) const {
   if (adaptive_cache_config && !k.cache_config_set) {
     // For more info about adaptive cache, see
     // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#shared-memory-7-x
-    unsigned total_shmem = kernel_info->smem * result;
+    
+    // let shmem all be L1 cache
+    //unsigned total_shmem = kernel_info->smem * result;
+    unsigned total_shmem = 0;
     assert(total_shmem >= 0 && total_shmem <= shmem_opt_list.back());
 
     // Unified cache config is in KB. Converting to B

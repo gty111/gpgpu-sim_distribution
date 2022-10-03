@@ -1723,6 +1723,12 @@ void shader_core_ctx::issue_block2core(kernel_info_t &kernel) {
   }
   assert(free_cta_hw_id != (unsigned)-1);
 
+  // alloc shmem for each cta
+  if(block_shm2glb[free_cta_hw_id]==0){
+     block_shm2glb[free_cta_hw_id] = 
+      (long)get_gpu()->gpu_malloc(m_config->gpgpu_shmem_per_block);
+  }
+
   // determine hardware threads and warps that will be used for this CTA
   int cta_size = kernel.threads_per_cta();
 

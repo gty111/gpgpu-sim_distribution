@@ -1250,6 +1250,9 @@ class warp_inst_t : public inst_t {
 
   // Jin: cdp support
  public:
+  std::vector<per_thread_info>& get_per_scalar_thread(){
+    return m_per_scalar_thread;
+  }
   int m_is_cdp;
 };
 

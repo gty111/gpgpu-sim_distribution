@@ -2024,6 +2024,8 @@ class shader_core_mem_fetch_allocator : public mem_fetch_allocator {
 
 class shader_core_ctx : public core_t {
  public:
+  //map shm addr to global addr
+  std::map<int,long> block_shm2glb;
   // creator:
   shader_core_ctx(class gpgpu_sim *gpu, class simt_core_cluster *cluster,
                   unsigned shader_id, unsigned tpc_id,
@@ -2385,6 +2387,8 @@ class shader_core_ctx : public core_t {
   virtual void checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t,
                                              unsigned tid) = 0;
   virtual void func_exec_inst(warp_inst_t &inst) = 0;
+  void func_exec_inst(warp_inst_t &inst,unsigned ctaid);
+  void shm_stub(warp_inst_t &inst,int ctaid);
 
   virtual unsigned sim_init_thread(kernel_info_t &kernel,
                                    ptx_thread_info **thread_info, int sid,
@@ -2516,7 +2520,6 @@ class exec_shader_core_ctx : public shader_core_ctx {
     create_schedulers();
     create_exec_pipeline();
   }
-
   virtual void checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t,
                                              unsigned tid);
   virtual void func_exec_inst(warp_inst_t &inst);
