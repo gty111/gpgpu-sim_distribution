@@ -3391,8 +3391,8 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k) const {
   unsigned int result_cta = max_cta_per_core;
 
   unsigned result = result_thread;
-  //reduce shmem restrict on CTA num per SM
-  result = gs_min2(result, result_shmem*2);
+  //remove shmem restrict on CTA num per SM
+  //result = gs_min2(result, result_shmem*2);
   result = gs_min2(result, result_regs);
   result = gs_min2(result, result_cta);
 
@@ -3402,7 +3402,7 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k) const {
     last_kinfo = kernel_info;
     printf("GPGPU-Sim uArch: CTA/core = %u, limited by:", result);
     if (result == result_thread) printf(" threads");
-    if (result == result_shmem*2) printf(" shmem");
+    //if (result == result_shmem*2) printf(" shmem");
     if (result == result_regs) printf(" regs");
     if (result == result_cta) printf(" cta_limit");
     printf("\n");
