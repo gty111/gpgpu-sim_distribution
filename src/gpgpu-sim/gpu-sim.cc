@@ -30,6 +30,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "gpu-sim.h"
+#include "gpu-cache.h"
 
 #include <math.h>
 #include <signal.h>
@@ -415,6 +416,17 @@ void shader_core_config::reg_options(class OptionParser *opp) {
       opp, "-gpgpu_shmem_per_block", OPT_UINT32, &gpgpu_shmem_per_block,
       "Size of shared memory per thread block or CTA (default 48kB)", "49152");
   option_parser_register(
+      opp, "-gpgpu_shmem_extra_maxsize", OPT_UINT32, &gpgpu_shmem_extra_maxsize,
+      "max size of total extra shared memory",
+      "1048576");
+  option_parser_register(
+      opp, "-gpgpu_shmem_infinite", OPT_BOOL, &gpgpu_shmem_infinite,
+      "whether shared memory is infinite(1 yes;0 no)",
+      "0");
+  option_parser_register(
+      opp, "-gpgpu_shmem_extra_on_L2", OPT_BOOL, &gpgpu_shmem_extra_on_L2,
+      "if extra shared memory alloc on L2","0");
+  option_parser_register(
       opp, "-gpgpu_shmem_size", OPT_UINT32, &gpgpu_shmem_size,
       "Size of shared memory per shader core (default 16kB)", "16384");
   option_parser_register(opp, "-gpgpu_shmem_option", OPT_CSTR,
@@ -771,6 +783,104 @@ void increment_x_then_y_then_z(dim3 &i, const dim3 &bound) {
   }
 }
 
+void *gpgpu_sim::gpu_malloc(size_t size,void *ptr){
+  unsigned long long result = m_dev_malloc;
+  //alloc on L2 cache
+  if(size>>63){
+    size <<= 1;
+    size >>= 1;
+    if(size!=0){
+      ptr2size[result] = size;
+      printf("Modify: alloc at L2 size:%d pointer:%llx ",size,result);
+    }
+
+    addrdec_t temp;
+    int line_success=0,line_fail=0;
+    for(unsigned long long addr=result;addr<size+result;addr+=128){
+      m_memory_config->m_address_mapping.addrdec_tlx(addr,&temp);
+      l2_cache * cache = m_memory_sub_partition[temp.sub_partition]->get_l2_cache();
+      tag_array * tag_arr = cache->get_tag_array();
+      sector_cache_block ** m_lines = (sector_cache_block **)tag_arr->get_m_lines();
+      cache_config * config = tag_arr->get_cache_config();
+      unsigned set_index = config->set_index(addr);
+      new_addr_type tag = config->tag(addr);
+      unsigned index = set_index * config->get_m_assoc();
+      int flag = 0;
+      /*
+        config->get_m_assoc()/2 fix L2 is full with SHARE 
+        and limit max alloc size is half L2 size
+      */
+      for(int i=0;i<config->get_m_assoc()/2;i++){ 
+        cache_block_state *status = m_lines[index+i]->m_status;
+        if(status[0]==SHARE)continue;
+        m_lines[index+i]->m_tag = tag;
+        for(int i=0;i<4;i++)status[i] = SHARE;
+        line_success ++;
+        flag = 1;
+        break;
+      }
+      if(!flag)line_fail++;
+    }
+    if(size!=0)
+      printf("success alloc %d fail alloc %d\n",
+        line_success*128,line_fail*128);
+    //printf("test:sub_partition %lx:%d\n",result,temp.sub_partition);
+    //m_memory_config->m_address_mapping.addrdec_tlx(result+256,&temp);
+    //printf("test:sub_partition %lx:%d\n",result+256,temp.sub_partition);
+  }
+  //free
+  if((size>>62) & 1){
+    if(!ptr)return 0;
+    size = ptr2size[(unsigned long long)ptr];
+    ptr2size[(unsigned long long)ptr] = 0;
+    if(!size) return 0;
+    addrdec_t temp;
+    int line_success=0,line_fail=0;
+    result = (unsigned long long)ptr;
+    for(unsigned long long addr=result;addr<size+result;addr+=128){
+      m_memory_config->m_address_mapping.addrdec_tlx(addr,&temp);
+      l2_cache * cache = m_memory_sub_partition[temp.sub_partition]->get_l2_cache();
+      tag_array * tag_arr = cache->get_tag_array();
+      sector_cache_block ** m_lines = (sector_cache_block **)tag_arr->get_m_lines();
+      cache_config * config = tag_arr->get_cache_config();
+      unsigned set_index = config->set_index(addr);
+      new_addr_type tag = config->tag(addr);
+      unsigned index = set_index * config->get_m_assoc();
+      int flag = 0;
+      /*
+        config->get_m_assoc()/2 fix L2 is full with SHARE 
+        and limit max alloc size is half L2 size
+      */
+      for(int i=0;i<config->get_m_assoc()/2;i++){ 
+        cache_block_state *status = m_lines[index+i]->m_status;
+        if(m_lines[index+i]->m_tag==tag && status[0]==SHARE){
+          for(int i=0;i<4;i++)status[i] = VALID;
+          flag = 1;
+          line_success ++;
+          break;
+        }   
+      }
+      if(!flag)line_fail++;
+    }
+    printf("Modify: free memory at L2 at %p ",ptr);
+    printf("success free %d fail free %d\n",
+        line_success*128,line_fail*128);
+    return 0;
+  }
+  if (g_debug_execution >= 3) {
+    printf(
+        "GPGPU-Sim PTX: allocating %zu bytes on GPU starting at address "
+        "0x%Lx\n",
+        size, m_dev_malloc);
+    fflush(stdout);
+  }
+  m_dev_malloc += size;
+  if (size % 256)
+    m_dev_malloc += (256 - size % 256);  // align to 256 byte boundaries
+  return (void *)result;
+}
+
+
 void gpgpu_sim::launch(kernel_info_t *kinfo) {
   unsigned cta_size = kinfo->threads_per_cta();
   if (cta_size > m_shader_config->n_thread_per_shader) {
@@ -915,7 +1025,7 @@ void exec_gpgpu_sim::createSIMTCluster() {
                                    m_shader_stats, m_memory_stats);
 }
 
-gpgpu_sim::gpgpu_sim(const gpgpu_sim_config &config, gpgpu_context *ctx)
+gpgpu_sim::gpgpu_sim(gpgpu_sim_config &config, gpgpu_context *ctx)
     : gpgpu_t(config, ctx), m_config(config) {
   gpgpu_ctx = ctx;
   m_shader_config = &m_config.m_shader_config;
@@ -1013,11 +1123,11 @@ int gpgpu_sim::wrp_size() const { return m_shader_config->warp_size; }
 
 int gpgpu_sim::shader_clock() const { return m_config.core_freq / 1000; }
 
-int gpgpu_sim::max_cta_per_core() const {
+int gpgpu_sim::max_cta_per_core() {
   return m_shader_config->max_cta_per_core;
 }
 
-int gpgpu_sim::get_max_cta(const kernel_info_t &k) const {
+int gpgpu_sim::get_max_cta(const kernel_info_t &k) {
   return m_shader_config->max_cta(k);
 }
 
@@ -1722,6 +1832,28 @@ void shader_core_ctx::issue_block2core(kernel_info_t &kernel) {
     }
   }
   assert(free_cta_hw_id != (unsigned)-1);
+
+  //modify:transfer shmem to gmem or L2
+  // origin shm per block
+  if(m_config->gpgpu_shmem_extra_per_block){
+    static const kernel_info_t *last_kinfo = NULL;
+    if(shm_size_per_block==0){
+      shm_size_per_block = m_config->gpgpu_shmem_size / m_config->max_cta(kernel);
+    }
+    if (last_kinfo != &kernel){
+      last_kinfo = &kernel;
+      printf("Modify: max shmem per core %d\n",m_config->gpgpu_shmem_size);
+      printf("Modify: max shmem (can be allocated) per block %d\n",shm_size_per_block);
+      printf("Modify: alloc %d for shmem on L2 at each shader\n",m_config->gpgpu_shmem_extra_per_block);
+    }
+    // alloc shmem on gmem or L2
+    if(block_shm2glb[free_cta_hw_id]==0){
+      unsigned long long ifonL2 = m_config->gpgpu_shmem_extra_on_L2;
+      block_shm2glb[free_cta_hw_id] = 
+        (long)get_gpu()->gpu_malloc(m_config->gpgpu_shmem_extra_per_block|ifonL2<<63);
+    }
+  }
+  //modify end
 
   // determine hardware threads and warps that will be used for this CTA
   int cta_size = kernel.threads_per_cta();

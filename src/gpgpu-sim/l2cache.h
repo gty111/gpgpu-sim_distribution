@@ -205,6 +205,10 @@ class memory_sub_partition {
     m_memcpy_cycle_offset += 1;
   }
 
+  l2_cache * get_l2_cache(){
+    return m_L2cache;
+  }
+
  private:
   // data
   unsigned m_id;  //< the global sub partition ID

@@ -237,15 +237,16 @@ void tag_array::remove_pending_line(mem_fetch *mf) {
 
 enum cache_request_status tag_array::probe(new_addr_type addr, unsigned &idx,
                                            mem_fetch *mf, bool is_write,
-                                           bool probe_mode) const {
+                                           bool probe_mode,
+                                           bool ifL2) const {
   mem_access_sector_mask_t mask = mf->get_access_sector_mask();
-  return probe(addr, idx, mask, is_write, probe_mode, mf);
+  return probe(addr, idx, mask, is_write, probe_mode, mf, ifL2);
 }
 
 enum cache_request_status tag_array::probe(new_addr_type addr, unsigned &idx,
                                            mem_access_sector_mask_t mask,
                                            bool is_write, bool probe_mode,
-                                           mem_fetch *mf) const {
+                                           mem_fetch *mf, bool ifL2) const {
   // assert( m_config.m_write_policy == READ_ONLY );
   unsigned set_index = m_config.set_index(addr);
   new_addr_type tag = m_config.tag(addr);
@@ -266,6 +267,9 @@ enum cache_request_status tag_array::probe(new_addr_type addr, unsigned &idx,
       } else if (line->get_status(mask) == VALID) {
         idx = index;
         return HIT;
+      } else if (line->get_status(mask) == SHARE){
+        idx = index;
+        return HIT;
       } else if (line->get_status(mask) == MODIFIED) {
         if ((!is_write && line->is_readable(mask)) || is_write) {
           idx = index;
@@ -282,7 +286,7 @@ enum cache_request_status tag_array::probe(new_addr_type addr, unsigned &idx,
         assert(line->get_status(mask) == INVALID);
       }
     }
-    if (!line->is_reserved_line()) {
+    if (!line->is_reserved_line() && line->get_status(mask)!=SHARE) {
       // percentage of dirty lines in the cache
       // number of dirty lines / total lines in the cache
       float dirty_line_percentage =
@@ -326,6 +330,14 @@ enum cache_request_status tag_array::probe(new_addr_type addr, unsigned &idx,
   } else
     abort();  // if an unreserved block exists, it is either invalid or
               // replaceable
+  /* let all local memory hit and alloc on L2*/
+  // FIXME: check MODIFY line to WB or set L2 to writethrough
+  if(get_cache_config()->get_local_on_L2() && ifL2 
+  && mf->get_inst().space.get_type()==local_space){
+    m_lines[idx]->m_tag = tag;
+    for(int i=0;i<4;i++)((sector_cache_block*)m_lines[idx])->m_status[i] = SHARE;
+    return HIT;
+  }
 
   return MISS;
 }
@@ -1756,7 +1768,7 @@ enum cache_request_status data_cache::access(new_addr_type addr, mem_fetch *mf,
   new_addr_type block_addr = m_config.block_addr(addr);
   unsigned cache_index = (unsigned)-1;
   enum cache_request_status probe_status =
-      m_tag_array->probe(block_addr, cache_index, mf, mf->is_write(), true);
+      m_tag_array->probe(block_addr, cache_index, mf, mf->is_write(), true, m_name[1]=='2');
   enum cache_request_status access_status =
       process_tag_probe(wr, probe_status, addr, cache_index, mf, time, events);
   m_stats.inc_stats(mf->get_access_type(),

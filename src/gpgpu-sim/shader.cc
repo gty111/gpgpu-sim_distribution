@@ -469,7 +469,7 @@ void shader_core_ctx::create_exec_pipeline() {
 shader_core_ctx::shader_core_ctx(class gpgpu_sim *gpu,
                                  class simt_core_cluster *cluster,
                                  unsigned shader_id, unsigned tpc_id,
-                                 const shader_core_config *config,
+                                 shader_core_config *config,
                                  const memory_config *mem_config,
                                  shader_core_stats *stats)
     : core_t(gpu, NULL, config->warp_size, config->n_thread_per_shader),
@@ -1020,8 +1020,39 @@ void shader_core_ctx::fetch() {
   m_L1I->cycle();
 }
 
-void exec_shader_core_ctx::func_exec_inst(warp_inst_t &inst) {
+
+/**
+ * insert before generate_mem_accesses
+ * tansfer part of shmem to gmem
+ **/
+void exec_shader_core_ctx::gty_stub(warp_inst_t &inst,int ctaid){
+  if( m_config->gpgpu_shmem_extra_per_block && (inst.is_load() || inst.is_store()) && inst.space.get_type()==shared_space){
+    bool ifshmem = 0;
+    for(auto &it:inst.m_per_scalar_thread){
+      for(int i=0;i<8;i++){
+        if(it.memreqaddr[i] != 0 && it.memreqaddr[i] < shm_size_per_block){
+          ifshmem = 1;
+          break;
+        }
+      }
+      if(ifshmem)break;
+    }
+    if(!ifshmem){
+      inst.space.set_type(global_space);
+      for(auto &it:inst.m_per_scalar_thread){
+        for(int i=0;i<8;i++){
+          if(it.memreqaddr[i] != 0){
+            it.memreqaddr[i] += (block_shm2glb[ctaid]-shm_size_per_block) ;
+          }
+        }
+      }
+    }
+  }
+}
+
+void exec_shader_core_ctx::func_exec_inst(warp_inst_t &inst,int ctaid) {
   execute_warp_inst_t(inst);
+  gty_stub(inst,ctaid);
   if (inst.is_load() || inst.is_store()) {
     inst.generate_mem_accesses();
     // inst.print_m_accessq();
@@ -1044,7 +1075,7 @@ void shader_core_ctx::issue_warp(register_set &pipe_reg_set,
                      m_warp[warp_id]->get_dynamic_warp_id(),
                      sch_id);  // dynamic instruction information
   m_stats->shader_cycle_distro[2 + (*pipe_reg)->active_count()]++;
-  func_exec_inst(**pipe_reg);
+  func_exec_inst(**pipe_reg,m_warp[warp_id]->get_cta_id());
 
   if (next_inst->op == BARRIER_OP) {
     m_warp[warp_id]->store_info_of_last_inst_at_barrier(*pipe_reg);
@@ -3338,7 +3369,7 @@ void shader_core_ctx::display_pipeline(FILE *fout, int print_mem,
   }
 }
 
-unsigned int shader_core_config::max_cta(const kernel_info_t &k) const {
+unsigned int shader_core_config::max_cta(const kernel_info_t &k){
   unsigned threads_per_cta = k.threads_per_cta();
   const class function_info *kernel = k.entry();
   unsigned int padded_cta_size = threads_per_cta;
@@ -3365,27 +3396,57 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k) const {
   unsigned int result_cta = max_cta_per_core;
 
   unsigned result = result_thread;
-  result = gs_min2(result, result_shmem);
+  //result = gs_min2(result, result_shmem);
   result = gs_min2(result, result_regs);
   result = gs_min2(result, result_cta);
+
+  if(result_shmem<result && !gpgpu_shmem_infinite){
+    unsigned int extra_shmem;
+    // make sure extra_shmem size < max extra_shmem size
+    while(1){ 
+      // BUG (int and unsigned) 
+      if(result * kernel_info->smem > gpgpu_shmem_size)
+        extra_shmem = num_shader() * (result * kernel_info->smem - gpgpu_shmem_size);
+      else 
+        extra_shmem = 0; 
+      if(extra_shmem>gpgpu_shmem_extra_maxsize)
+        result -= 1;
+      else break;
+    }
+    assert(result);
+    result_shmem = result;
+  }else {
+    gpgpu_shmem_extra_per_block = 0;
+  }
+
+  // gpu_max_cta_per_shader is limited by number of CTAs if not enough to keep
+  // all cores busy
+  unsigned result_tot_cta = k.num_blocks() / num_shader();
+  if (k.num_blocks() < result * num_shader()) {
+    result = k.num_blocks() / num_shader();
+    if (k.num_blocks() % num_shader()){
+      result++;
+      result_tot_cta ++;
+    } 
+  }
+
+  if(result*kernel_info->smem > gpgpu_shmem_size && !gpgpu_shmem_infinite)
+    gpgpu_shmem_extra_per_block = kernel_info->smem - gpgpu_shmem_size/result;
+  else 
+    gpgpu_shmem_extra_per_block = 0;
 
   static const struct gpgpu_ptx_sim_info *last_kinfo = NULL;
   if (last_kinfo !=
       kernel_info) {  // Only print out stats if kernel_info struct changes
     last_kinfo = kernel_info;
+    if(gpgpu_shmem_extra_on_L2)printf("Modify: reduce shm restrict on cta/core\n");
     printf("GPGPU-Sim uArch: CTA/core = %u, limited by:", result);
     if (result == result_thread) printf(" threads");
-    if (result == result_shmem) printf(" shmem");
+    if (result == result_shmem && !gpgpu_shmem_infinite) printf(" shmem");
     if (result == result_regs) printf(" regs");
-    if (result == result_cta) printf(" cta_limit");
+    if (result == result_cta) printf(" max_cta_limit");
+    if (result == result_tot_cta) printf(" tot_cta_limit"); 
     printf("\n");
-  }
-
-  // gpu_max_cta_per_shader is limited by number of CTAs if not enough to keep
-  // all cores busy
-  if (k.num_blocks() < result * num_shader()) {
-    result = k.num_blocks() / num_shader();
-    if (k.num_blocks() % num_shader()) result++;
   }
 
   assert(result <= MAX_CTA_PER_SHADER);
@@ -3406,6 +3467,9 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k) const {
     // For more info about adaptive cache, see
     // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#shared-memory-7-x
     unsigned total_shmem = kernel_info->smem * result;
+    if(total_shmem > shmem_opt_list.back()){
+      total_shmem = gpgpu_shmem_size;
+    }
     assert(total_shmem >= 0 && total_shmem <= shmem_opt_list.back());
 
     // Unified cache config is in KB. Converting to B
@@ -4288,7 +4352,7 @@ void exec_simt_core_cluster::create_shader_core_ctx() {
 }
 
 simt_core_cluster::simt_core_cluster(class gpgpu_sim *gpu, unsigned cluster_id,
-                                     const shader_core_config *config,
+                                     shader_core_config *config,
                                      const memory_config *mem_config,
                                      shader_core_stats *stats,
                                      class memory_stats_t *mstats) {

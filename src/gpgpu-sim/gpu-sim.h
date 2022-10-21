@@ -32,6 +32,7 @@
 #ifndef GPU_SIM_H
 #define GPU_SIM_H
 
+#include <map>
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
@@ -517,10 +518,11 @@ class watchpoint_event {
 
 class gpgpu_sim : public gpgpu_t {
  public:
-  gpgpu_sim(const gpgpu_sim_config &config, gpgpu_context *ctx);
+  gpgpu_sim(gpgpu_sim_config &config, gpgpu_context *ctx);
 
   void set_prop(struct cudaDeviceProp *prop);
-
+  std::map<unsigned long long,int>ptr2size;
+  void *gpu_malloc(size_t size,void *ptr=NULL);
   void launch(kernel_info_t *kinfo);
   bool can_start_kernel();
   unsigned finished_kernel();
@@ -555,8 +557,8 @@ class gpgpu_sim : public gpgpu_t {
   int num_registers_per_block() const;
   int wrp_size() const;
   int shader_clock() const;
-  int max_cta_per_core() const;
-  int get_max_cta(const kernel_info_t &k) const;
+  int max_cta_per_core();
+  int get_max_cta(const kernel_info_t &k);
   const struct cudaDeviceProp *get_prop() const;
   enum divergence_support_t simd_model() const;
 
@@ -648,10 +650,10 @@ class gpgpu_sim : public gpgpu_t {
   bool gpu_deadlock;
 
   //// configuration parameters ////
-  const gpgpu_sim_config &m_config;
+  gpgpu_sim_config &m_config;
 
   const struct cudaDeviceProp *m_cuda_properties;
-  const shader_core_config *m_shader_config;
+  shader_core_config *m_shader_config;
   const memory_config *m_memory_config;
 
   // stats
@@ -727,7 +729,7 @@ class gpgpu_sim : public gpgpu_t {
 
 class exec_gpgpu_sim : public gpgpu_sim {
  public:
-  exec_gpgpu_sim(const gpgpu_sim_config &config, gpgpu_context *ctx)
+  exec_gpgpu_sim(gpgpu_sim_config &config, gpgpu_context *ctx)
       : gpgpu_sim(config, ctx) {
     createSIMTCluster();
   }

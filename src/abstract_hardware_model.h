@@ -598,7 +598,7 @@ class gpgpu_t {
   unsigned long long gpu_sim_cycle;
   unsigned long long gpu_tot_sim_cycle;
 
-  void *gpu_malloc(size_t size);
+  void *gpu_malloc(size_t size,void *ptr=NULL);
   void *gpu_mallocarray(size_t count);
   void gpu_memset(size_t dst_start_addr, int c, size_t count);
   void memcpy_to_gpu(size_t dst_start_addr, const void *src, size_t count);
@@ -1209,7 +1209,7 @@ class warp_inst_t : public inst_t {
   unsigned get_uid() const { return m_uid; }
   unsigned get_schd_id() const { return m_scheduler_id; }
   active_mask_t get_warp_active_mask() const { return m_warp_active_mask; }
-
+  unsigned m_warp_id;
  protected:
   unsigned m_uid;
   bool m_empty;
@@ -1219,7 +1219,6 @@ class warp_inst_t : public inst_t {
   bool m_isatomic;
   bool should_do_atomic;
   bool m_is_printf;
-  unsigned m_warp_id;
   unsigned m_dynamic_warp_id;
   const core_config *m_config;
   active_mask_t m_warp_active_mask;  // dynamic active mask for timing model
@@ -1241,8 +1240,6 @@ class warp_inst_t : public inst_t {
                                                        // 32B access in 8 chunks
                                                        // of 4B each)
   };
-  bool m_per_scalar_thread_valid;
-  std::vector<per_thread_info> m_per_scalar_thread;
   bool m_mem_accesses_created;
   std::list<mem_access_t> m_accessq;
 
@@ -1250,6 +1247,8 @@ class warp_inst_t : public inst_t {
 
   // Jin: cdp support
  public:
+  bool m_per_scalar_thread_valid;
+  std::vector<per_thread_info> m_per_scalar_thread;
   int m_is_cdp;
 };
 

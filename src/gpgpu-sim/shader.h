@@ -1550,7 +1550,7 @@ class shader_core_config : public core_config {
     }
   }
   void reg_options(class OptionParser *opp);
-  unsigned max_cta(const kernel_info_t &k) const;
+  unsigned max_cta(const kernel_info_t &k);
   unsigned num_shader() const {
     return n_simt_clusters * n_simt_cores_per_cluster;
   }
@@ -1580,6 +1580,10 @@ class shader_core_config : public core_config {
       max_cta_per_core;  // Limit on number of concurrent CTAs in shader core
   unsigned max_barriers_per_cta;
   char *gpgpu_scheduler_string;
+  bool gpgpu_shmem_infinite;
+  unsigned gpgpu_shmem_extra_maxsize;
+  unsigned gpgpu_shmem_extra_per_block;
+  bool gpgpu_shmem_extra_on_L2;
   unsigned gpgpu_shmem_per_block;
   unsigned gpgpu_registers_per_block;
   char *pipeline_widths_string;
@@ -2024,10 +2028,14 @@ class shader_core_mem_fetch_allocator : public mem_fetch_allocator {
 
 class shader_core_ctx : public core_t {
  public:
+  //map shm addr to global addr
+  std::map<int,long> block_shm2glb;
+  //origin shm per block
+  int shm_size_per_block;
   // creator:
   shader_core_ctx(class gpgpu_sim *gpu, class simt_core_cluster *cluster,
                   unsigned shader_id, unsigned tpc_id,
-                  const shader_core_config *config,
+                  shader_core_config *config,
                   const memory_config *mem_config, shader_core_stats *stats);
 
   // used by simt_core_cluster:
@@ -2384,7 +2392,7 @@ class shader_core_ctx : public core_t {
                           kernel_info_t &kernel);
   virtual void checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t,
                                              unsigned tid) = 0;
-  virtual void func_exec_inst(warp_inst_t &inst) = 0;
+  virtual void func_exec_inst(warp_inst_t &inst,int ctaid) = 0;
 
   virtual unsigned sim_init_thread(kernel_info_t &kernel,
                                    ptx_thread_info **thread_info, int sid,
@@ -2424,7 +2432,7 @@ class shader_core_ctx : public core_t {
   unsigned m_sid;  // shader id
   unsigned m_tpc;  // texture processor cluster id (aka, node id when using
                    // interconnect concentration)
-  const shader_core_config *m_config;
+  shader_core_config *m_config;
   const memory_config *m_memory_config;
   class simt_core_cluster *m_cluster;
 
@@ -2506,7 +2514,7 @@ class exec_shader_core_ctx : public shader_core_ctx {
  public:
   exec_shader_core_ctx(class gpgpu_sim *gpu, class simt_core_cluster *cluster,
                        unsigned shader_id, unsigned tpc_id,
-                       const shader_core_config *config,
+                       shader_core_config *config,
                        const memory_config *mem_config,
                        shader_core_stats *stats)
       : shader_core_ctx(gpu, cluster, shader_id, tpc_id, config, mem_config,
@@ -2516,10 +2524,10 @@ class exec_shader_core_ctx : public shader_core_ctx {
     create_schedulers();
     create_exec_pipeline();
   }
-
+  void gty_stub(warp_inst_t &inst,int ctaid);
   virtual void checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t,
                                              unsigned tid);
-  virtual void func_exec_inst(warp_inst_t &inst);
+  virtual void func_exec_inst(warp_inst_t &inst,int ctaid);
   virtual unsigned sim_init_thread(kernel_info_t &kernel,
                                    ptx_thread_info **thread_info, int sid,
                                    unsigned tid, unsigned threads_left,
@@ -2537,7 +2545,7 @@ class exec_shader_core_ctx : public shader_core_ctx {
 class simt_core_cluster {
  public:
   simt_core_cluster(class gpgpu_sim *gpu, unsigned cluster_id,
-                    const shader_core_config *config,
+                    shader_core_config *config,
                     const memory_config *mem_config, shader_core_stats *stats,
                     memory_stats_t *mstats);
 
@@ -2586,7 +2594,7 @@ class simt_core_cluster {
  protected:
   unsigned m_cluster_id;
   gpgpu_sim *m_gpu;
-  const shader_core_config *m_config;
+  shader_core_config *m_config;
   shader_core_stats *m_stats;
   memory_stats_t *m_memory_stats;
   shader_core_ctx **m_core;
@@ -2600,7 +2608,7 @@ class simt_core_cluster {
 class exec_simt_core_cluster : public simt_core_cluster {
  public:
   exec_simt_core_cluster(class gpgpu_sim *gpu, unsigned cluster_id,
-                         const shader_core_config *config,
+                         shader_core_config *config,
                          const memory_config *mem_config,
                          class shader_core_stats *stats,
                          class memory_stats_t *mstats)

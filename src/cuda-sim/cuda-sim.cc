@@ -438,13 +438,13 @@ addr_t generic_to_local(unsigned smid, unsigned hwtid, addr_t addr) {
 
 addr_t generic_to_global(addr_t addr) { return addr; }
 
-void *gpgpu_t::gpu_malloc(size_t size) {
+void *gpgpu_t::gpu_malloc(size_t size,void *ptr) {
   unsigned long long result = m_dev_malloc;
   if (g_debug_execution >= 3) {
     printf(
         "GPGPU-Sim PTX: allocating %zu bytes on GPU starting at address "
         "0x%Lx\n",
-        size, m_dev_malloc);
+      size, m_dev_malloc);
     fflush(stdout);
   }
   m_dev_malloc += size;

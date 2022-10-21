@@ -43,7 +43,7 @@
 
 #define MAX_DEFAULT_CACHE_SIZE_MULTIBLIER 4
 
-enum cache_block_state { INVALID = 0, RESERVED, VALID, MODIFIED };
+enum cache_block_state { INVALID = 0, RESERVED, VALID, MODIFIED , SHARE};
 
 enum cache_request_status {
   HIT = 0,
@@ -402,6 +402,7 @@ struct sector_cache_block : public cache_block_t {
   virtual void set_status(enum cache_block_state status,
                           mem_access_sector_mask_t sector_mask) {
     unsigned sidx = get_sector_index(sector_mask);
+    if(m_status[sidx]==SHARE)return;
     m_status[sidx] = status;
   }
 
@@ -478,7 +479,7 @@ struct sector_cache_block : public cache_block_t {
     printf("m_block_addr is %llu, status = %u %u %u %u\n", m_block_addr,
            m_status[0], m_status[1], m_status[2], m_status[3]);
   }
-
+  cache_block_state m_status[SECTOR_CHUNCK_SIZE];
  private:
   unsigned m_sector_alloc_time[SECTOR_CHUNCK_SIZE];
   unsigned m_last_sector_access_time[SECTOR_CHUNCK_SIZE];
@@ -486,7 +487,6 @@ struct sector_cache_block : public cache_block_t {
   unsigned m_line_alloc_time;
   unsigned m_line_last_access_time;
   unsigned m_line_fill_time;
-  cache_block_state m_status[SECTOR_CHUNCK_SIZE];
   bool m_ignore_on_fill_status[SECTOR_CHUNCK_SIZE];
   bool m_set_modified_on_fill[SECTOR_CHUNCK_SIZE];
   bool m_set_readable_on_fill[SECTOR_CHUNCK_SIZE];
@@ -556,6 +556,7 @@ class cache_config {
     m_set_index_function = LINEAR_SET_FUNCTION;
     m_is_streaming = false;
     m_wr_percent = 0;
+    m_local_on_L2 = 0;
   }
   void init(char *config, FuncCache status) {
     cache_status = status;
@@ -563,10 +564,11 @@ class cache_config {
     char ct, rp, wp, ap, mshr_type, wap, sif;
 
     int ntok =
-        sscanf(config, "%c:%u:%u:%u,%c:%c:%c:%c:%c,%c:%u:%u,%u:%u,%u", &ct,
+        sscanf(config, "%c:%u:%u:%u,%c:%c:%c:%c:%c,%c:%u:%u,%u:%u,%u,%u", &ct,
                &m_nset, &m_line_sz, &m_assoc, &rp, &wp, &ap, &wap, &sif,
                &mshr_type, &m_mshr_entries, &m_mshr_max_merge,
-               &m_miss_queue_size, &m_result_fifo_entries, &m_data_port_width);
+               &m_miss_queue_size, &m_result_fifo_entries, &m_data_port_width,
+               &m_local_on_L2);
 
     if (ntok < 12) {
       if (!strcmp(config, "none")) {
@@ -752,6 +754,7 @@ class cache_config {
         exit_parse_error();
     }
   }
+  bool get_local_on_L2() const { return m_local_on_L2;}
   bool disabled() const { return m_disabled; }
   unsigned get_line_sz() const {
     assert(m_valid);
@@ -816,6 +819,9 @@ class cache_config {
     assert(m_valid);
     return (m_assoc * m_nset * m_line_sz) / 1024;
   }
+  unsigned get_m_assoc(){
+    return m_assoc;
+  }
   bool is_streaming() { return m_is_streaming; }
   FuncCache get_cache_status() { return cache_status; }
   void set_allocation_policy(enum allocation_policy_t alloc) {
@@ -849,6 +855,7 @@ class cache_config {
   unsigned m_sector_sz_log2;
   unsigned original_m_assoc;
   bool m_is_streaming;
+  bool m_local_on_L2;
 
   enum replacement_policy_t m_replacement_policy;  // 'L' = LRU, 'F' = FIFO
   enum write_policy_t
@@ -928,6 +935,7 @@ class l2_cache_config : public cache_config {
 };
 
 class tag_array {
+  friend class data_cache;
  public:
   // Use this constructor
   tag_array(cache_config &config, int core_id, int type_id);
@@ -935,11 +943,13 @@ class tag_array {
 
   enum cache_request_status probe(new_addr_type addr, unsigned &idx,
                                   mem_fetch *mf, bool is_write,
-                                  bool probe_mode = false) const;
+                                  bool probe_mode = false,
+                                  bool ifL2 = false) const;
   enum cache_request_status probe(new_addr_type addr, unsigned &idx,
                                   mem_access_sector_mask_t mask, bool is_write,
                                   bool probe_mode = false,
-                                  mem_fetch *mf = NULL) const;
+                                  mem_fetch *mf = NULL,
+                                  bool ifL2 = false) const;
   enum cache_request_status access(new_addr_type addr, unsigned time,
                                    unsigned &idx, mem_fetch *mf);
   enum cache_request_status access(new_addr_type addr, unsigned time,
@@ -968,6 +978,12 @@ class tag_array {
   void add_pending_line(mem_fetch *mf);
   void remove_pending_line(mem_fetch *mf);
   void inc_dirty() { m_dirty++; }
+  cache_config *get_cache_config() const{
+    return &m_config;
+  }
+  cache_block_t ** get_m_lines(){
+    return m_lines;
+  }
 
  protected:
   // This constructor is intended for use only from derived classes that wish to
@@ -1336,6 +1352,9 @@ class baseline_cache : public cache_t {
                         mem_access_sector_mask_t mask) {
     mem_access_byte_mask_t byte_mask;
     m_tag_array->fill(addr, time, mask, byte_mask, true);
+  }
+  tag_array * get_tag_array(){
+    return m_tag_array;
   }
 
  protected:
