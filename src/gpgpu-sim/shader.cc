@@ -3396,9 +3396,12 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
   unsigned int result_cta = max_cta_per_core;
 
   unsigned result = result_thread;
+  printf("Modify: result_thread:%d\n",result_thread);
   //result = gs_min2(result, result_shmem);
   result = gs_min2(result, result_regs);
+  printf("Modify: result_thread:%d\n",result_regs);
   result = gs_min2(result, result_cta);
+  printf("Modify: result_thread:%d\n",result_cta);
 
   if(result_shmem<result && !gpgpu_shmem_infinite){
     unsigned int extra_shmem;
