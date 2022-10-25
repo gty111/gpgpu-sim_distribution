@@ -427,6 +427,10 @@ void shader_core_config::reg_options(class OptionParser *opp) {
       opp, "-gpgpu_shmem_extra_on_L2", OPT_BOOL, &gpgpu_shmem_extra_on_L2,
       "if extra shared memory alloc on L2","0");
   option_parser_register(
+      opp, "-gpgpu_max_cta_per_sm", OPT_UINT32, &gpgpu_max_cta_per_sm,
+      "max cta number per sm","32"
+  );
+  option_parser_register(
       opp, "-gpgpu_shmem_size", OPT_UINT32, &gpgpu_shmem_size,
       "Size of shared memory per shader core (default 16kB)", "16384");
   option_parser_register(opp, "-gpgpu_shmem_option", OPT_CSTR,

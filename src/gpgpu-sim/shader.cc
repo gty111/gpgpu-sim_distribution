@@ -3430,6 +3430,8 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
     } 
   }
 
+  result = gpgpu_max_cta_per_sm>result ? result: gpgpu_max_cta_per_sm;
+
   if(result*kernel_info->smem > gpgpu_shmem_size && !gpgpu_shmem_infinite)
     gpgpu_shmem_extra_per_block = kernel_info->smem - gpgpu_shmem_size/result;
   else 
@@ -3446,6 +3448,7 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
     if (result == result_regs) printf(" regs");
     if (result == result_cta) printf(" max_cta_limit");
     if (result == result_tot_cta) printf(" tot_cta_limit"); 
+    if (result == -gpgpu_max_cta_per_sm) printf(" config_max_cta_limit");
     printf("\n");
   }
 

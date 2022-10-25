@@ -1583,6 +1583,7 @@ class shader_core_config : public core_config {
   bool gpgpu_shmem_infinite;
   unsigned gpgpu_shmem_extra_maxsize;
   unsigned gpgpu_shmem_extra_per_block;
+  unsigned gpgpu_max_cta_per_sm;
   bool gpgpu_shmem_extra_on_L2;
   unsigned gpgpu_shmem_per_block;
   unsigned gpgpu_registers_per_block;
