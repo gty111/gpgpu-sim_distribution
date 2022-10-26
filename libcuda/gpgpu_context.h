@@ -32,7 +32,6 @@ class gpgpu_context {
   // global list
   symbol_table *g_global_allfiles_symbol_table;
   const char *g_filename;
-  const char *ptxas_arg;
   unsigned sm_next_access_uid;
   unsigned warp_inst_sm_next_uid;
   unsigned operand_info_sm_next_uid;  // uid for operand_info

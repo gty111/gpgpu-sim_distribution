@@ -1051,6 +1051,7 @@ const unsigned MAX_ACCESSES_PER_INSN_PER_THREAD = 8;
 
 class warp_inst_t : public inst_t {
  public:
+  bool m_if_shmem2L2;
   // constructors
   warp_inst_t() {
     m_uid = 0;
@@ -1069,6 +1070,7 @@ class warp_inst_t : public inst_t {
     m_is_printf = false;
     m_is_cdp = 0;
     should_do_atomic = true;
+    m_if_shmem2L2 = 0;
   }
   virtual ~warp_inst_t() {}
 

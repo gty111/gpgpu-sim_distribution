@@ -1038,6 +1038,7 @@ void exec_shader_core_ctx::gty_stub(warp_inst_t &inst,int ctaid){
       if(ifshmem)break;
     }
     if(!ifshmem){
+      inst.m_if_shmem2L2 = 1;
       inst.space.set_type(global_space);
       for(auto &it:inst.m_per_scalar_thread){
         for(int i=0;i<8;i++){
@@ -2177,6 +2178,8 @@ bool ldst_unit::memory_cycle(warp_inst_t &inst,
     // skip L1 cache if the option is enabled
     if (m_core->get_config()->gmem_skip_L1D && (CACHE_L1 != inst.cache_op))
       bypassL1D = true;
+  } else if (inst.m_if_shmem2L2){
+    bypassL1D = true;
   }
   if (bypassL1D) {
     // bypass L1 cache
@@ -2745,6 +2748,8 @@ void ldst_unit::cycle() {
                    mf->get_access_type() ==
                        GLOBAL_ACC_W) {  // global memory access
           if (m_core->get_config()->gmem_skip_L1D) bypassL1D = true;
+        } else if (mf->get_inst().m_if_shmem2L2){
+          bypassL1D = true;
         }
         if (bypassL1D) {
           if (m_next_global == NULL) {
