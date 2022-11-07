@@ -309,6 +309,8 @@ void memory_config::reg_options(class OptionParser *opp) {
 }
 
 void shader_core_config::reg_options(class OptionParser *opp) {
+  option_parser_register(opp,"-gpgpu_cta_per_core",OPT_INT32,&gpgpu_cta_per_core,
+                        "cta/core","0");
   option_parser_register(opp, "-gpgpu_simd_model", OPT_INT32, &model,
                          "1 = post-dominator", "1");
   option_parser_register(
@@ -416,16 +418,9 @@ void shader_core_config::reg_options(class OptionParser *opp) {
       opp, "-gpgpu_shmem_per_block", OPT_UINT32, &gpgpu_shmem_per_block,
       "Size of shared memory per thread block or CTA (default 48kB)", "49152");
   option_parser_register(
-      opp, "-gpgpu_shmem_extra_maxsize", OPT_UINT32, &gpgpu_shmem_extra_maxsize,
-      "max size of total extra shared memory",
-      "1048576");
-  option_parser_register(
       opp, "-gpgpu_shmem_infinite", OPT_BOOL, &gpgpu_shmem_infinite,
       "whether shared memory is infinite(1 yes;0 no)",
       "0");
-  option_parser_register(
-      opp, "-gpgpu_shmem_extra_on_L2", OPT_BOOL, &gpgpu_shmem_extra_on_L2,
-      "if extra shared memory alloc on L2","0");
   option_parser_register(
       opp, "-gpgpu_max_cta_per_sm", OPT_UINT32, &gpgpu_max_cta_per_sm,
       "max cta number per sm","32"
@@ -1837,24 +1832,14 @@ void shader_core_ctx::issue_block2core(kernel_info_t &kernel) {
   }
   assert(free_cta_hw_id != (unsigned)-1);
 
-  //modify:transfer shmem to gmem or L2
+  //modify:transfer shmem to L2
   // origin shm per block
-  if(m_config->gpgpu_shmem_extra_per_block){
-    static const kernel_info_t *last_kinfo = NULL;
-    if(shm_size_per_block==0){
-      shm_size_per_block = m_config->gpgpu_shmem_size / m_config->max_cta(kernel);
-    }
-    if (last_kinfo != &kernel){
-      last_kinfo = &kernel;
-      printf("Modify: max shmem per core %d\n",m_config->gpgpu_shmem_size);
-      printf("Modify: max shmem (can be allocated) per block %d\n",shm_size_per_block);
-      printf("Modify: alloc %d for shmem on L2 at each shader\n",m_config->gpgpu_shmem_extra_per_block);
-    }
-    // alloc shmem on gmem or L2
-    if(block_shm2glb[free_cta_hw_id]==0){
-      unsigned long long ifonL2 = m_config->gpgpu_shmem_extra_on_L2;
-      block_shm2glb[free_cta_hw_id] = 
-        (long)get_gpu()->gpu_malloc(m_config->gpgpu_shmem_extra_per_block|ifonL2<<63);
+  if(m_config->gpgpu_shmem_L2_cta_num){
+    // alloc shmem on L2
+    static int cta_shmem_L2_num = 0;
+    if(cta_shmem_L2_num < m_config->gpgpu_shmem_L2_cta_num){
+      cta_shmem_L2_num ++;
+      block_shm2glb[free_cta_hw_id] = (long)get_gpu()->gpu_malloc(m_config->gpgpu_shmem_per_block|1ull<<63);
     }
   }
   //modify end

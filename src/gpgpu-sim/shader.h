@@ -1569,6 +1569,7 @@ class shader_core_config : public core_config {
   class gpgpu_context *gpgpu_ctx;
   // data
   char *gpgpu_shader_core_pipeline_opt;
+  int gpgpu_cta_per_core;
   bool gpgpu_perfect_mem;
   bool gpgpu_clock_gated_reg_file;
   bool gpgpu_clock_gated_lanes;
@@ -1581,10 +1582,8 @@ class shader_core_config : public core_config {
   unsigned max_barriers_per_cta;
   char *gpgpu_scheduler_string;
   bool gpgpu_shmem_infinite;
-  unsigned gpgpu_shmem_extra_maxsize;
-  unsigned gpgpu_shmem_extra_per_block;
   unsigned gpgpu_max_cta_per_sm;
-  bool gpgpu_shmem_extra_on_L2;
+  unsigned gpgpu_shmem_L2_cta_num;
   unsigned gpgpu_shmem_per_block;
   unsigned gpgpu_registers_per_block;
   char *pipeline_widths_string;
@@ -2029,10 +2028,8 @@ class shader_core_mem_fetch_allocator : public mem_fetch_allocator {
 
 class shader_core_ctx : public core_t {
  public:
-  //map shm addr to global addr
+  //if map shmem to global
   std::map<int,long> block_shm2glb;
-  //origin shm per block
-  int shm_size_per_block;
   // creator:
   shader_core_ctx(class gpgpu_sim *gpu, class simt_core_cluster *cluster,
                   unsigned shader_id, unsigned tpc_id,

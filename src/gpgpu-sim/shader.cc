@@ -1026,25 +1026,15 @@ void shader_core_ctx::fetch() {
  * tansfer part of shmem to gmem
  **/
 void exec_shader_core_ctx::gty_stub(warp_inst_t &inst,int ctaid){
-  if( m_config->gpgpu_shmem_extra_per_block && (inst.is_load() || inst.is_store()) && inst.space.get_type()==shared_space){
-    bool ifshmem = 0;
+  if(block_shm2glb[ctaid] && m_config->gpgpu_shmem_per_block && 
+        (inst.is_load() || inst.is_store()) && inst.space.get_type()==shared_space){
+    
+    inst.m_if_shmem2L2 = 1;
+    inst.space.set_type(global_space);
     for(auto &it:inst.m_per_scalar_thread){
       for(int i=0;i<8;i++){
-        if(it.memreqaddr[i] != 0 && it.memreqaddr[i] < shm_size_per_block){
-          ifshmem = 1;
-          break;
-        }
-      }
-      if(ifshmem)break;
-    }
-    if(!ifshmem){
-      inst.m_if_shmem2L2 = 1;
-      inst.space.set_type(global_space);
-      for(auto &it:inst.m_per_scalar_thread){
-        for(int i=0;i<8;i++){
-          if(it.memreqaddr[i] != 0){
-            it.memreqaddr[i] += (block_shm2glb[ctaid]-shm_size_per_block) ;
-          }
+        if(it.memreqaddr[i] != 0){
+          it.memreqaddr[i] += block_shm2glb[ctaid] ;
         }
       }
     }
@@ -3387,9 +3377,10 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
   const struct gpgpu_ptx_sim_info *kernel_info = ptx_sim_kernel_info(kernel);
 
   // Limit by shmem/shader
+  unsigned int result_origin_shmem = (unsigned)-1;
   unsigned int result_shmem = (unsigned)-1;
   if (kernel_info->smem > 0)
-    result_shmem = gpgpu_shmem_size / kernel_info->smem;
+    result_origin_shmem = gpgpu_shmem_size / kernel_info->smem;
 
   // Limit by register count, rounded up to multiple of 4.
   unsigned int result_regs = (unsigned)-1;
@@ -3397,6 +3388,7 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
     result_regs = gpgpu_shader_registers /
                   (padded_cta_size * ((kernel_info->regs + 3) & ~3));
 
+  gpgpu_shmem_per_block = kernel_info->smem;
   // Limit by CTA
   unsigned int result_cta = max_cta_per_core;
 
@@ -3405,23 +3397,9 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
   result = gs_min2(result, result_regs);
   result = gs_min2(result, result_cta);
 
-  if(result_shmem<result && !gpgpu_shmem_infinite){
-    unsigned int extra_shmem;
-    // make sure extra_shmem size < max extra_shmem size
-    while(1){ 
-      // BUG (int and unsigned) 
-      if(result * kernel_info->smem > gpgpu_shmem_size)
-        extra_shmem = num_shader() * (result * kernel_info->smem - gpgpu_shmem_size);
-      else 
-        extra_shmem = 0; 
-      if(extra_shmem>gpgpu_shmem_extra_maxsize)
-        result -= 1;
-      else break;
-    }
-    assert(result);
-    result_shmem = result;
-  }else {
-    gpgpu_shmem_extra_per_block = 0;
+  if(gpgpu_cta_per_core){
+    result_shmem = gpgpu_cta_per_core;
+    result = result_shmem;
   }
 
   // gpu_max_cta_per_shader is limited by number of CTAs if not enough to keep
@@ -3438,15 +3416,15 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
   result = gpgpu_max_cta_per_sm>result ? result: gpgpu_max_cta_per_sm;
 
   if(result*kernel_info->smem > gpgpu_shmem_size && !gpgpu_shmem_infinite)
-    gpgpu_shmem_extra_per_block = kernel_info->smem - gpgpu_shmem_size/result;
+    gpgpu_shmem_L2_cta_num = result - result_origin_shmem;
   else 
-    gpgpu_shmem_extra_per_block = 0;
+    gpgpu_shmem_L2_cta_num = 0;
 
   static const struct gpgpu_ptx_sim_info *last_kinfo = NULL;
   if (last_kinfo !=
       kernel_info) {  // Only print out stats if kernel_info struct changes
     last_kinfo = kernel_info;
-    if(gpgpu_shmem_extra_on_L2)printf("Modify: reduce shm restrict on cta/core\n");
+    if(gpgpu_shmem_L2_cta_num)printf("Modify: reduce shm restrict on cta/core\n");
     printf("GPGPU-Sim uArch: CTA/core = %u, limited by:", result);
     if (result == result_thread) printf(" threads");
     if (result == result_shmem && !gpgpu_shmem_infinite) printf(" shmem");
