@@ -1836,9 +1836,8 @@ void shader_core_ctx::issue_block2core(kernel_info_t &kernel) {
   // origin shm per block
   if(m_config->gpgpu_shmem_L2_cta_num){
     // alloc shmem on L2
-    static int cta_shmem_L2_num = 0;
-    if(cta_shmem_L2_num < m_config->gpgpu_shmem_L2_cta_num){
-      cta_shmem_L2_num ++;
+    if(m_cta_shmem_L2_num < m_config->gpgpu_shmem_L2_cta_num){
+      m_cta_shmem_L2_num ++;
       block_shm2glb[free_cta_hw_id] = (long)get_gpu()->gpu_malloc(m_config->gpgpu_shmem_per_block|1ull<<63);
     }
   }

@@ -501,6 +501,7 @@ shader_core_ctx::shader_core_ctx(class gpgpu_sim *gpu,
   m_occupied_ctas = 0;
   m_occupied_hwtid.reset();
   m_occupied_cta_to_hwtid.clear();
+  m_cta_shmem_L2_num = 0;
 }
 
 void shader_core_ctx::reinit(unsigned start_thread, unsigned end_thread,

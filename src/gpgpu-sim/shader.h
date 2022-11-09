@@ -2028,6 +2028,7 @@ class shader_core_mem_fetch_allocator : public mem_fetch_allocator {
 
 class shader_core_ctx : public core_t {
  public:
+  int m_cta_shmem_L2_num = 0;
   //if map shmem to global
   std::map<int,long> block_shm2glb;
   // creator:
