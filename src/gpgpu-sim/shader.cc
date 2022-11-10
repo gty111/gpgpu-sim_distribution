@@ -3424,6 +3424,8 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
   static const struct gpgpu_ptx_sim_info *last_kinfo = NULL;
   if (last_kinfo !=
       kernel_info) {  // Only print out stats if kernel_info struct changes
+    printf("thread: %d shmem: %d regs: %d cta: %d tot_cta:%d max_cta:%d\n"
+      ,result_thread,result_shmem,result_regs,result_cta,result_tot_cta,gpgpu_max_cta_per_sm);
     last_kinfo = kernel_info;
     if(gpgpu_shmem_L2_cta_num)printf("Modify: reduce shm restrict on cta/core\n");
     printf("GPGPU-Sim uArch: CTA/core = %u, limited by:", result);
