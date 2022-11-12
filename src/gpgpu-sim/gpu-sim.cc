@@ -415,6 +415,9 @@ void shader_core_config::reg_options(class OptionParser *opp) {
       &ldst_unit_response_queue_size,
       "number of response packets in ld/st unit ejection buffer", "2");
   option_parser_register(
+      opp, "-gpgpu_shmem_all_L2", OPT_BOOL, &gpgpu_shmem_all_L2,
+      "Shmem all alloc to L2", "0");
+  option_parser_register(
       opp, "-gpgpu_shmem_per_block", OPT_UINT32, &gpgpu_shmem_per_block,
       "Size of shared memory per thread block or CTA (default 48kB)", "49152");
   option_parser_register(
@@ -790,11 +793,11 @@ void *gpgpu_sim::gpu_malloc(size_t size,void *ptr){
     size >>= 1;
     if(size!=0){
       ptr2size[result] = size;
-      printf("Modify: alloc at L2 size:%d pointer:%llx ",size,result);
+      printf("Modify: alloc at L2 size:%d pointer:%llx\n",size,result);
     }
 
     addrdec_t temp;
-    int line_success=0,line_fail=0;
+    //int line_success=0,line_fail=0;
     for(unsigned long long addr=result;addr<size+result;addr+=128){
       m_memory_config->m_address_mapping.addrdec_tlx(addr,&temp);
       l2_cache * cache = m_memory_sub_partition[temp.sub_partition]->get_l2_cache();
@@ -814,15 +817,12 @@ void *gpgpu_sim::gpu_malloc(size_t size,void *ptr){
         if(status[0]==SHARE)continue;
         m_lines[index+i]->m_tag = tag;
         for(int i=0;i<4;i++)status[i] = SHARE;
-        line_success ++;
+        //line_success ++;
         flag = 1;
         break;
       }
-      if(!flag)line_fail++;
+      if(!flag)assert(0);//line_fail++;
     }
-    if(size!=0)
-      printf("success alloc %d fail alloc %d\n",
-        line_success*128,line_fail*128);
     //printf("test:sub_partition %lx:%d\n",result,temp.sub_partition);
     //m_memory_config->m_address_mapping.addrdec_tlx(result+256,&temp);
     //printf("test:sub_partition %lx:%d\n",result+256,temp.sub_partition);
@@ -2146,7 +2146,8 @@ void gpgpu_sim::cycle() {
         if (m_memory_config->m_L2_config.get_num_lines()) {
           int dlc = 0;
           for (unsigned i = 0; i < m_memory_config->m_n_mem; i++) {
-            dlc = m_memory_sub_partition[i]->flushL2();
+            //dlc = m_memory_sub_partition[i]->flushL2();
+            m_memory_sub_partition[i]->invalidateL2();
             assert(dlc == 0);  // TODO: need to model actual writes to DRAM here
             printf("Dirty lines flushed from L2 %d is %d\n", i, dlc);
           }

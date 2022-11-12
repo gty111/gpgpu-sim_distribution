@@ -3398,10 +3398,9 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
   result = gs_min2(result, result_regs);
   result = gs_min2(result, result_cta);
 
-  if(gpgpu_cta_per_core){
-    result_shmem = gpgpu_cta_per_core;
-    result = result_shmem;
-  }
+
+  result_shmem = result_origin_shmem + gpgpu_cta_per_core;
+  result = gs_min2(result, result_shmem);
 
   // gpu_max_cta_per_shader is limited by number of CTAs if not enough to keep
   // all cores busy
@@ -3420,6 +3419,8 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
     gpgpu_shmem_L2_cta_num = result - result_origin_shmem;
   else 
     gpgpu_shmem_L2_cta_num = 0;
+
+  if(gpgpu_shmem_all_L2) gpgpu_shmem_L2_cta_num = result;
 
   static const struct gpgpu_ptx_sim_info *last_kinfo = NULL;
   if (last_kinfo !=
@@ -3455,10 +3456,12 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
   if (adaptive_cache_config && !k.cache_config_set) {
     // For more info about adaptive cache, see
     // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#shared-memory-7-x
-    unsigned total_shmem = kernel_info->smem * result;
-    if(total_shmem > shmem_opt_list.back()){
-      total_shmem = gpgpu_shmem_size;
-    }
+    unsigned total_shmem ;
+    if(gpgpu_shmem_all_L2)
+      total_shmem = 0;
+    else 
+      total_shmem = kernel_info->smem * result_origin_shmem;
+
     assert(total_shmem >= 0 && total_shmem <= shmem_opt_list.back());
 
     // Unified cache config is in KB. Converting to B

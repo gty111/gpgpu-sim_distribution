@@ -1584,6 +1584,7 @@ class shader_core_config : public core_config {
   bool gpgpu_shmem_infinite;
   unsigned gpgpu_max_cta_per_sm;
   unsigned gpgpu_shmem_L2_cta_num;
+  bool gpgpu_shmem_all_L2;
   unsigned gpgpu_shmem_per_block;
   unsigned gpgpu_registers_per_block;
   char *pipeline_widths_string;
@@ -2051,6 +2052,9 @@ class shader_core_ctx : public core_t {
   void broadcast_barrier_reduction(unsigned cta_id, unsigned bar_id,
                                    warp_set_t warps);
   void set_kernel(kernel_info_t *k) {
+    // reinit shmem to L2 map
+    m_cta_shmem_L2_num = 0;
+    block_shm2glb.clear();
     assert(k);
     m_kernel = k;
     //        k->inc_running();
