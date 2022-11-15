@@ -115,7 +115,7 @@ __global__ void histogram1024Kernel(unsigned int *d_Result, float *d_Data, float
 
 
 //Thread block (== subhistogram) count
-#define BLOCK_N 64
+#define BLOCK_N 2048
 
 
 ////////////////////////////////////////////////////////////////////////////////

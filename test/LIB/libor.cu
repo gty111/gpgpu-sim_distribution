@@ -6,8 +6,8 @@
 
 // parameters for nVidia device execution
 
-#define BLOCK_SIZE 64
-#define GRID_SIZE 8192
+#define BLOCK_SIZE 32
+#define GRID_SIZE 1024
 
 // parameters for LIBOR calculation
 
@@ -423,6 +423,7 @@ int main(int argc, char **argv){
   CUT_SAFE_CALL( cutResetTimer(hTimer) );
   CUT_SAFE_CALL( cutStartTimer(hTimer) ); 
 
+  /*
   // Launch the device computation threads
 
   Pathcalc_Portfolio_KernelGPU<<<dimGrid, dimBlock>>>(d_v,d_Lb);
@@ -451,6 +452,7 @@ int main(int argc, char **argv){
   printf("v  = %15.8f\n", v);
   printf("Lb = %15.8f\n", Lb);
   printf("Time (Greeks)   : %f msec\n", gpuTime);
+  */
 
   // Release GPU memory
 

@@ -74,10 +74,10 @@ DESCRIPTION
 
 // Tests to run
 // To run the overlap test instead of the original one.
-#define FEATURE_RUN_OVERLAP_TEST
+//#define FEATURE_RUN_OVERLAP_TEST
 
 // Turn on to run SHA1, otherwise it will run MD5
-#define FEATURE_RUN_SHA1
+//#define FEATURE_RUN_SHA1
 
 // Enable the multi-thread version for the CPU functions on windows
 //#define FEATURE_WIN32_THREADS

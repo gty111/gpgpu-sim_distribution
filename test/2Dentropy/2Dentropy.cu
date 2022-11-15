@@ -122,11 +122,13 @@ int main(int argc, char **argv) {
   input.sync_device();
   wk_vector<float> output(W * H);
   const int BLOCK_DIM_X = 128;
+  /*
   WuK_Timer("entropy_with_register_spiling", [&] {
     entropy_with_register_spiling<BLOCK_DIM_X>
         <<<dim3((W + BLOCK_DIM_X - 1) / BLOCK_DIM_X, H, 1), BLOCK_DIM_X>>>(
             W, H, input.device_data, output.device_data);
   });
+  */
   WuK_Timer("entropy_with_low_occupancy", [&] {
     entropy_with_low_occupancy<BLOCK_DIM_X>
         <<<dim3((W + BLOCK_DIM_X - 1) / BLOCK_DIM_X, H, 1), BLOCK_DIM_X>>>(

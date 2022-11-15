@@ -63,15 +63,15 @@ int main(int argc, char **argv) {
 
   float *d_Input, *d_Output, *d_Buffer;
 
-  const int imageW = 8192;
+  const int imageW = 1024;
   const int imageH = 8192;
-  const int iterations = 16;
+  const int iterations = 1;
 
   StopWatchInterface *hTimer = NULL;
 
   // Use command-line specified CUDA device, otherwise use device with highest
   // Gflops/s
-  findCudaDevice(argc, (const char **)argv);
+  //findCudaDevice(argc, (const char **)argv);
 
   sdkCreateTimer(&hTimer);
 
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
   printf("Running GPU convolution (%u identical iterations)...\n\n",
          iterations);
 
-  for (int i = -1; i < iterations; i++) {
+  for (int i = 0; i < iterations; i++) {
     // i == -1 -- warmup iteration
     if (i == 0) {
       checkCudaErrors(cudaDeviceSynchronize());
