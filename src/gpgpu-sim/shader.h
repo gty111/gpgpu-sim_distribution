@@ -1581,10 +1581,8 @@ class shader_core_config : public core_config {
       max_cta_per_core;  // Limit on number of concurrent CTAs in shader core
   unsigned max_barriers_per_cta;
   char *gpgpu_scheduler_string;
-  bool gpgpu_shmem_infinite;
   unsigned gpgpu_max_cta_per_sm;
   unsigned gpgpu_shmem_L2_cta_num;
-  bool gpgpu_shmem_all_L2;
   unsigned gpgpu_shmem_per_block;
   unsigned gpgpu_registers_per_block;
   char *pipeline_widths_string;

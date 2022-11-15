@@ -415,15 +415,8 @@ void shader_core_config::reg_options(class OptionParser *opp) {
       &ldst_unit_response_queue_size,
       "number of response packets in ld/st unit ejection buffer", "2");
   option_parser_register(
-      opp, "-gpgpu_shmem_all_L2", OPT_BOOL, &gpgpu_shmem_all_L2,
-      "Shmem all alloc to L2", "0");
-  option_parser_register(
       opp, "-gpgpu_shmem_per_block", OPT_UINT32, &gpgpu_shmem_per_block,
       "Size of shared memory per thread block or CTA (default 48kB)", "49152");
-  option_parser_register(
-      opp, "-gpgpu_shmem_infinite", OPT_BOOL, &gpgpu_shmem_infinite,
-      "whether shared memory is infinite(1 yes;0 no)",
-      "0");
   option_parser_register(
       opp, "-gpgpu_max_cta_per_sm", OPT_UINT32, &gpgpu_max_cta_per_sm,
       "max cta number per sm","32"

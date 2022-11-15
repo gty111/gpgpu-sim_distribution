@@ -1,4 +1,10 @@
-# Infinite shmem
+# 指定多启动CTA数量
+多启动的CTA SHMEM默认分配到L2上
+```
+-gpgpu_cta_per_core <num>
+```
+
+# Infinite shmem(deprecated)
 ```
 -gpgpu_shmem_infinite 1
 ```
@@ -12,7 +18,7 @@
 -gpgpu_cache:dl2 S:32:128:24,L:B:m:L:P,A:192:4,32:0,32,1
 ```
 
-# SHMEM to L2 or Global
+# SHMEM to L2 or Global(deprecated)
 
 **在不改动源程序的基础上**
 

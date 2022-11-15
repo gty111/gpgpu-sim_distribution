@@ -3415,12 +3415,11 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
 
   result = gpgpu_max_cta_per_sm>result ? result: gpgpu_max_cta_per_sm;
 
-  if(result*kernel_info->smem > gpgpu_shmem_size && !gpgpu_shmem_infinite)
+  if(result*kernel_info->smem > gpgpu_shmem_size)
     gpgpu_shmem_L2_cta_num = result - result_origin_shmem;
   else 
     gpgpu_shmem_L2_cta_num = 0;
 
-  if(gpgpu_shmem_all_L2) gpgpu_shmem_L2_cta_num = result;
 
   static const struct gpgpu_ptx_sim_info *last_kinfo = NULL;
   if (last_kinfo !=
@@ -3431,7 +3430,7 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
     if(gpgpu_shmem_L2_cta_num)printf("Modify: reduce shm restrict on cta/core\n");
     printf("GPGPU-Sim uArch: CTA/core = %u, limited by:", result);
     if (result == result_thread) printf(" threads");
-    if (result == result_shmem && !gpgpu_shmem_infinite) printf(" shmem");
+    if (result == result_shmem) printf(" shmem");
     if (result == result_regs) printf(" regs");
     if (result == result_cta) printf(" max_cta_limit");
     if (result == result_tot_cta) printf(" tot_cta_limit"); 
@@ -3457,10 +3456,8 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
     // For more info about adaptive cache, see
     // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#shared-memory-7-x
     unsigned total_shmem ;
-    if(gpgpu_shmem_all_L2)
-      total_shmem = 0;
-    else 
-      total_shmem = kernel_info->smem * result_origin_shmem;
+
+    total_shmem = kernel_info->smem * result_origin_shmem;
 
     assert(total_shmem >= 0 && total_shmem <= shmem_opt_list.back());
 
