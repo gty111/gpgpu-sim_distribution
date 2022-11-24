@@ -3415,7 +3415,9 @@ unsigned int shader_core_config::max_cta(const kernel_info_t &k){
 
   result = gpgpu_max_cta_per_sm>result ? result: gpgpu_max_cta_per_sm;
 
-  if(result*kernel_info->smem > gpgpu_shmem_size)
+  if(gpgpu_act_cta_per_core)result = gs_min2(gpgpu_act_cta_per_core,result_thread);
+
+  if(result*kernel_info->smem > gpgpu_shmem_size && !gpgpu_act_cta_per_core)
     gpgpu_shmem_L2_cta_num = result - result_origin_shmem;
   else 
     gpgpu_shmem_L2_cta_num = 0;

@@ -1570,6 +1570,7 @@ class shader_core_config : public core_config {
   // data
   char *gpgpu_shader_core_pipeline_opt;
   int gpgpu_cta_per_core;
+  int gpgpu_act_cta_per_core;
   bool gpgpu_perfect_mem;
   bool gpgpu_clock_gated_reg_file;
   bool gpgpu_clock_gated_lanes;
