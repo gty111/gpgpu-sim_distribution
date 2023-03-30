@@ -311,8 +311,10 @@ void memory_config::reg_options(class OptionParser *opp) {
 void shader_core_config::reg_options(class OptionParser *opp) {
   option_parser_register(opp,"-gpgpu_cta_per_core",OPT_INT32,&gpgpu_cta_per_core,
                         "cta/core","0");
-  option_parser_register(opp,"-gpgpu_act_cta_per_core",OPT_INT32,&gpgpu_act_cta_per_core,
-                        "cta/core","0");
+  // option_parser_register(opp,"-gpgpu_act_cta_per_core",OPT_INT32,&gpgpu_act_cta_per_core,
+  //                       "cta/core","0");
+  option_parser_register(opp, "-gty_extra_cta", OPT_INT32, &gty_extra_cta,
+                          "extra cta","0");
   option_parser_register(opp, "-gpgpu_simd_model", OPT_INT32, &model,
                          "1 = post-dominator", "1");
   option_parser_register(
